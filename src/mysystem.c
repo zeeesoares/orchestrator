@@ -4,7 +4,7 @@
 // caso contrario retorna o valor do comando executado
 
 
-int mysystem(const char *command) {
+int mysystem(char command[]) {
     int res = -1;
     char* args[20];
     int i = 0;

@@ -1,14 +1,14 @@
 #include <stdio.h>
 #include "mysystem.h"
 
-void controller(int N, char** commands) {
+void controller(int N, char command[]) {
 	pid_t pid[N];
 	int i;
 	for (i = 0; i < N; i++) {
 		pid[i] = fork();
 		if (pid[i] == 0) {
 			int count;
-			for (count = 0; mysystem(commands[i]) != 0; count++);
+			for (count = 0; mysystem(command) != 0; count++);
 			_exit(count);
 		}
 	}
@@ -16,7 +16,7 @@ void controller(int N, char** commands) {
 		int status;
 		waitpid(pid[i],&status,0);
 		if (WEXITSTATUS(status))
-			printf("%s %d\n",commands[i], WEXITSTATUS(status));
+			printf("%s %d\n",command, WEXITSTATUS(status));
 	}
 }
 

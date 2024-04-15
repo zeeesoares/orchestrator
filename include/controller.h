@@ -5,4 +5,4 @@
 #include <sys/wait.h>
 
 
-int mysystem (char command[]);
+void controller(int N, char commands[]);

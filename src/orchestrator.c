@@ -7,7 +7,18 @@
 #include <string.h>
 #include <errno.h>
 
+#include "controller.h"
+
+
+
 #define MAX_BUFFER_SIZE 300
+
+typedef struct process_struct {
+    int pid;
+    int time;
+    char command[MAX_BUFFER_SIZE - sizeof(int) * 2]; // comando com argumentos
+} ProcessStruct;
+
 
 int main(int argc, char *argv[]) {
     /*
@@ -16,6 +27,8 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
     */
+
+   int program_counter = 0;
 
     // Criar o pipe com nome para comunicação com o cliente
     if (mkfifo("pipe_servidor", 0666) == -1) {
@@ -26,7 +39,6 @@ int main(int argc, char *argv[]) {
     }
 
     int fd;
-    char buffer[MAX_BUFFER_SIZE];
 
     // Abrir o pipe
     fd = open("pipe_servidor", O_RDONLY);
@@ -35,12 +47,14 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    ProcessStruct new;
     while (1) {
         // Ler a mensagem do cliente
-        ssize_t bytes_lidos = read(fd, buffer, sizeof(buffer));
+        ssize_t bytes_lidos = read(fd, &new, sizeof(ProcessStruct));
         if (bytes_lidos > 0) {
-            buffer[bytes_lidos] = '\0';
-            printf("Mensagem recebida do cliente: %s\n", buffer);
+            program_counter++;
+            printf("Mensagem recebida do cliente: %d %d %s\n", new.pid, new.time, new.command);
+            controller(1,new.command);
         }
     }
 

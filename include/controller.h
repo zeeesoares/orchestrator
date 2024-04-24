@@ -6,10 +6,18 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <stdio.h>
+#include <string.h>
 
 #define MAX_BUFFER_SIZE 300
 
 #define MAX_REQUESTS 100
+
+typedef enum request_type {
+  NEW,
+  EXECUTING,
+  DONE
+} REQUEST_TYPE;
 
 typedef struct PROCESS_STRUCT {
     int pid;
@@ -22,14 +30,6 @@ typedef struct PROCESS_REQUESTS {
     int current_index;
     int capacity;
 } PROCESS_REQUESTS;
-
-typedef enum request_type {
-  NEW,
-  EXECUTING,
-  DONE
-} REQUEST_TYPE;
-
-
 
 PROCESS_REQUESTS* init_process_requests(int capacity);
 

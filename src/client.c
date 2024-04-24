@@ -14,20 +14,17 @@ int main(int argc, char *argv[]) {
     int fd;
 
     if (argc < 5) {
-        fprintf(stderr, "Uso: %s <tempo> -u/-p \"<programa> [args]\"\n", argv[0]);
+        fprintf(stderr, "Uso: %s execute -time -u/-p \"<programa> [args]\"\n", argv[0]);
         exit(EXIT_FAILURE);
     }
     
-
-    fd = open(MAIN_FIFO_SERVER, O_WRONLY);
-    if (fd == -1) {
-        perror("Erro ao abrir o FIFO para escrita");
-        exit(EXIT_FAILURE);
-    }
+    open_fifo(&fd,MAIN_FIFO_SERVER,O_WRONLY);
 
     PROCESS_STRUCT new;
     new.pid = getpid();
-    new.time = atoi(argv[3]);
+    new.time = atoi(argv[2]);
+    printf("%d\n",new.time);
+    printf("%d\n",new.pid);
     strcpy(new.command, argv[4]);
 
     char *buffername = create_fifo(new.pid);

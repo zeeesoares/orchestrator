@@ -1,66 +1,51 @@
+#include "orchestrator.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <string.h>
-#include <errno.h>
-
-#include "controller.h"
-
-
-
-#define MAX_BUFFER_SIZE 300
-
-typedef struct process_struct {
-    int pid;
-    int time;
-    char command[MAX_BUFFER_SIZE - sizeof(int) * 2]; // comando com argumentos
-} ProcessStruct;
-
 
 int main(int argc, char *argv[]) {
-    /*
-    if (argc < 4) {
-        fprintf(stderr, "Uso: %s output_folder parallel-tasks sched-policy\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    */
+    int fdRD, fdWR;
+    PROCESS_REQUESTS* pr = init_process_requests(MAX_REQUESTS);
 
-   int program_counter = 0;
+    make_fifo(MAIN_FIFO_SERVER);
 
-    // Criar o pipe com nome para comunicação com o cliente
-    if (mkfifo("pipe_servidor", 0666) == -1) {
-        if (errno != EEXIST) {
-            perror("Erro ao criar o pipe nomeado");
-            exit(EXIT_FAILURE);
-        }
-    }
+    open_fifo(&fdRD, MAIN_FIFO_SERVER, O_RDONLY);
+    open_fifo(&fdWR, MAIN_FIFO_SERVER, O_WRONLY);
 
-    int fd;
-
-    // Abrir o pipe
-    fd = open("pipe_servidor", O_RDONLY);
-    if (fd == -1) {
-        perror("Erro ao abrir o pipe nomeado");
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("Erro ao criar processo filho");
         exit(EXIT_FAILURE);
     }
 
-    ProcessStruct new;
-    while (1) {
-        // Ler a mensagem do cliente
-        ssize_t bytes_lidos = read(fd, &new, sizeof(ProcessStruct));
-        if (bytes_lidos > 0) {
-            program_counter++;
-            printf("Mensagem recebida do cliente: %d %d %s\n", new.pid, new.time, new.command);
-            controller(1,new.command);
+    if (pid == 0) {
+        while (1) {
+            PROCESS_STRUCT new;
+            ssize_t read_bytes;
+            read_bytes = read(fdRD, &new, sizeof(PROCESS_STRUCT));
+            if (read_bytes > 0) {
+                if (new.time == -1) break;
+                else {
+                    add_process_request(pr, &new);
+                }
+            }
         }
+        exit(EXIT_SUCCESS);
+    } else {
+        print_all_process_requests(pr);
+
+        wait(NULL);
+        close(fdRD);
+        close(fdWR);
+        unlink(MAIN_FIFO_SERVER);
+
+        free_process_requests(pr);
+
+        return 0;
     }
-
-    // Fechar o pipe
-    close(fd);
-    unlink("pipe_servidor");  // Remover o pipe nomeado
-
-    return 0;
-} 
+}

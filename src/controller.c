@@ -1,39 +1,44 @@
+#include "controller.h"
 #include <stdio.h>
-#include "mysystem.h"
 
-void controller(int N, char command[]) {
-	pid_t pid[N];
-	int i;
-	for (i = 0; i < N; i++) {
-		pid[i] = fork();
-		if (pid[i] == 0) {
-			int count;
-			for (count = 0; mysystem(command) != 0; count++);
-			_exit(count);
-		}
-	}
-	for (i = 0; i < N; i++) {
-		int status;
-		waitpid(pid[i],&status,0);
-		if (WEXITSTATUS(status))
-			printf("%s %d\n",command, WEXITSTATUS(status));
-	}
+PROCESS_REQUESTS* init_process_requests(int capacity) {
+    PROCESS_REQUESTS* pr = (PROCESS_REQUESTS*)malloc(sizeof(PROCESS_REQUESTS));
+    if (pr == NULL) {
+        perror("Erro ao alocar memória para a estrutura de solicitações de processo");
+        exit(EXIT_FAILURE);
+    }
+    pr->requests = (PROCESS_STRUCT**)malloc(capacity * sizeof(PROCESS_STRUCT*));
+    if (pr->requests == NULL) {
+        perror("Erro ao alocar memória para a matriz de processos");
+        free(pr);
+        exit(EXIT_FAILURE);
+    }
+    pr->current_index = 0;
+    pr->capacity = capacity;
+    return pr;
 }
 
+void add_process_request(PROCESS_REQUESTS* pr, PROCESS_STRUCT* process) {
+    if (pr->current_index >= pr->capacity) {
+        fprintf(stderr, "Capacidade máxima de solicitações de processo atingida\n");
+        return;
+    }
+    pr->requests[pr->current_index] = process;
+    pr->current_index++;
+}
 
+void print_all_process_requests(PROCESS_REQUESTS* pr) {
+    printf("Processos armazenados:\n");
+    for (int i = 0; i < pr->current_index; i++) {
+        PROCESS_STRUCT* process = pr->requests[i];
+        printf("PID: %d, Time: %d, Command: %s\n", process->pid, process->time, process->command);
+    }
+}
 
-
-// int main(int argc, char* argv[]) {
-
-//     char *commands[argc-1];
-//     int N = 0;
-// 	for(int i=1; i < argc; i++){
-// 		commands[N] = strdup(argv[i]);
-// 		printf("command[%d] = %s\n", N, commands[N]);
-//         N++;
-// 	}
-
-//     controller(N, commands);
-
-// 	return 0;
-// }
+void free_process_requests(PROCESS_REQUESTS* pr) {
+    for (int i = 0; i < pr->current_index; i++) {
+        free(pr->requests[i]);
+    }
+    free(pr->requests);
+    free(pr);
+}

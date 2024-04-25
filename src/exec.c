@@ -8,7 +8,9 @@
 #define MAX_COMMANDS 10
 
 
-int exec_command(char* arg) {
+int exec_command(int pid, char* arg) {
+    int status;
+
     char *exec_args[MAX_COMMANDS + 1]; // +1 for NULL terminator
     int exec_ret = 0;
     int i = 0;
@@ -25,6 +27,25 @@ int exec_command(char* arg) {
     }
     exec_args[i] = NULL;
 
-    exec_ret = execvp(exec_args[0], exec_args);
-    return exec_ret;
+    pid_t pid_fork = fork();
+
+    if (pid_fork == 0) {
+        char filename[256];
+        snprintf(filename, sizeof(filename), "tmp/task_output_%d.txt", pid);
+        
+        int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
+        close(fd);
+
+        exec_ret = execvp(exec_args[0], exec_args);
+        _exit(0);
+    }
+    wait(NULL);
+
+    if (WEXITSTATUS(status)) {
+        return EXIT_SUCCESS;
+    }
+    
+    return EXIT_FAILURE;
 }

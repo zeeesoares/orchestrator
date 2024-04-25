@@ -9,9 +9,15 @@
 #include <sys/stat.h>
 
 int main(int argc, char *argv[]) {
+
+    //if (argc < 4) {
+    //    fprintf(stderr, "Uso: %s output_folder parallel-tasks sched-policy");
+    //    exit(EXIT_FAILURE);
+    //}
+
     int fdRD, fdWR;
     PROCESS_REQUESTS* pr = init_process_requests(MAX_REQUESTS);
-    fprintf(stderr,"Orchestrator is running...\n",28);
+    write(STDOUT_FILENO,"Orchestrator is running...\n",28);
     
     unlink(MAIN_FIFO_SERVER);
     make_fifo(MAIN_FIFO_SERVER);
@@ -31,21 +37,19 @@ int main(int argc, char *argv[]) {
             ssize_t read_bytes;
             read_bytes = read(fdRD, &new, sizeof(PROCESS_STRUCT));
             if (read_bytes > 0) {
-                if (new.time == -1) break;
+                if (new.request == EXIT) break;
+                else if (new.request == STATUS) print_all_process_requests(pr); 
                 else {
                     add_process_request(pr, &new);
-                    //exec_command(new.command);
+                    exec_command(new.pid,new.command);
                 }
             }
         }
-        print_all_process_requests(pr);
-        exit(EXIT_SUCCESS);
+        _exit(0);
     } else { //Código Processo-Pai
 
         wait(NULL);
         
-        print_all_process_requests(pr);
-
         close(fdRD);
         close(fdWR);
         unlink(MAIN_FIFO_SERVER);

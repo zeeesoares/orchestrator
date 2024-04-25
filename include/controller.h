@@ -14,14 +14,17 @@
 #define MAX_REQUESTS 100
 
 typedef enum request_type {
+  COMMAND,
   NEW,
-  EXECUTING,
-  DONE
+  STATUS,
+  PIPELINE,
+  EXIT
 } REQUEST_TYPE;
 
 typedef struct PROCESS_STRUCT {
     int pid;
     int time;
+    REQUEST_TYPE request;
     char command[MAX_BUFFER_SIZE - sizeof(int) * 2];
 } PROCESS_STRUCT;
 

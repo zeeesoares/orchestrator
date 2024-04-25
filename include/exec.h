@@ -9,6 +9,6 @@
 
 #include "utils.h"
 
-int exec_command(char* arg);
+int exec_command(int pid,char* arg);
 
 #endif 

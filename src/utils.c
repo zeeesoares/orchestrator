@@ -36,3 +36,15 @@ void open_fifo(int *fd, char *fifo_name, int flags) {
     exit(EXIT_FAILURE);
   }
 }
+
+const char* getRequestType(REQUEST_TYPE req) {
+   switch (req) 
+   {
+      case NEW: return "New";
+      case COMMAND: return "Command";
+      case STATUS: return "Status";
+      case PIPELINE: return "Pipeline";
+      case EXIT: return "Exit";
+      default:  return "Null";
+   }
+}

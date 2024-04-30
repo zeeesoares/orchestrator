@@ -8,43 +8,54 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "orchestrator.h"
+#include "controller.h"
 
 void make_fifo(char *fifo_name) {
-  if (mkfifo(fifo_name, 0666) == -1) {
-    perror("mkfifo");
-    exit(EXIT_FAILURE);
-  }
+    if (mkfifo(fifo_name, 0666) == -1) {
+        perror("mkfifo");
+        exit(EXIT_FAILURE);
+    }
 }
 
 char *create_fifo(pid_t pid) {
-  char *fifo_name = malloc(sizeof(char) * 64);
-  sprintf(fifo_name, "tmp/FIFO_%d", pid);  // NOLINT
+    char *fifo_name = malloc(sizeof(char) * 64);
+    sprintf(fifo_name, "tmp/FIFO_%d", pid);  // NOLINT
 
-  if (mkfifo(fifo_name, 0666) == -1) {
-    perror("mkfifo");
-    exit(EXIT_FAILURE);
-  }
+    if (mkfifo(fifo_name, 0666) == -1) {
+        perror("mkfifo");
+        exit(EXIT_FAILURE);
+    }
 
-  return fifo_name;
+    return fifo_name;
 }
 
 void open_fifo(int *fd, char *fifo_name, int flags) {
-  *fd = open(fifo_name, flags);
+    *fd = open(fifo_name, flags);
 
-  if (*fd == -1) {
-    perror("open");
-    exit(EXIT_FAILURE);
-  }
+    if (*fd == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
 }
 
 const char* getRequestType(REQUEST_TYPE req) {
-   switch (req) 
-   {
-      case NEW: return "New";
-      case COMMAND: return "Command";
-      case STATUS: return "Status";
-      case PIPELINE: return "Pipeline";
-      case EXIT: return "Exit";
-      default:  return "Null";
-   }
+    switch (req) 
+    {
+        case NEW: return "New";
+        case COMMAND: return "Command";
+        case STATUS: return "Status";
+        case PIPELINE: return "Pipeline";
+        case EXIT: return "Exit";
+        default:  return "Null";
+    }
+}
+
+SCHED_POL getSchedPol(char* arg) {
+    if (!strcmp(arg,"FCFS"))
+        return FCFS;
+    else if (!strcmp(arg,"SJF"))
+        return SJF;
+    else 
+        exit(EXIT_FAILURE);
 }

@@ -11,15 +11,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-
 #include "utils.h"
 #include "client.h"
-#include "controller.h"
-
-
-typedef enum SCHED_POL {
-    FCFS,
-    SJF
-} SCHED_POL;
 
 #endif 

@@ -1,12 +1,6 @@
 #include "orchestrator.h"
+#include "utils.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 
 int main(int argc, char *argv[]) {
 
@@ -22,7 +16,6 @@ int main(int argc, char *argv[]) {
     int program_counter = 0;
 
     int fdRD, fdWR;
-    PROCESS_REQUESTS* pr = init_process_requests(MAX_REQUESTS);
         
     write(STDOUT_FILENO,"Orchestrator is running...\n",28);
     
@@ -33,16 +26,19 @@ int main(int argc, char *argv[]) {
     open_fifo(&fdWR, MAIN_FIFO_SERVER, O_WRONLY); // Abrir o FIFO para escrita
 
     while (1) {
-        PROCESS_STRUCT new;
+        Task new;
         ssize_t read_bytes;
-        read_bytes = read(fdRD, &new, sizeof(PROCESS_STRUCT));
+        read_bytes = read(fdRD, &new, sizeof(Task));
         if (read_bytes > 0) {
-            if (new.request == EXIT) break;
-            else if (new.request == STATUS) print_all_process_requests(pr); 
-                //handle_request_status();
+            if (new.type == EXIT) break;
+            else if (new.type == STATUS) break; 
+                //handle_request_status()
             else {
-                //handle_request(pr, &new);
-                
+                program_counter++;
+                char* clientFIFO = create_fifo_name(new.pid);
+                int fdClientRet;
+                open_fifo(&fdClientRet,clientFIFO,O_WRONLY);
+                write(fdClientRet,program_counter,sizeof(int));
             }
         }
     }
@@ -51,7 +47,6 @@ int main(int argc, char *argv[]) {
     close(fdWR);
     unlink(MAIN_FIFO_SERVER);
 
-    free_process_requests(pr);
 
     return 0;
 

@@ -10,6 +10,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+
 
 #define MAX_BUFFER_SIZE 300
 #define MAX_COMMANDS 10
@@ -19,35 +21,47 @@ typedef enum request_type {
   COMMAND,
   NEW,
   STATUS,
+  WAITING,
+  RUNNING,
+  FINISHED,
+  KILL,
   PIPELINE,
   EXIT
 } REQUEST_TYPE;
 
 typedef struct PROCESS_STRUCT {
     int pid;
+    int id;
     int time;
     REQUEST_TYPE request;
     char command[MAX_BUFFER_SIZE - sizeof(int) * 2];
 } PROCESS_STRUCT;
 
-typedef struct PROCESS_REQUESTS {
-    PROCESS_STRUCT** requests;
-    int current_index;
-    int capacity;
-} PROCESS_REQUESTS;
+typedef struct Task {
+    PROCESS_STRUCT* process;
+    struct Task* next;
+} Task;
 
-PROCESS_REQUESTS* init_process_requests(int capacity);
+typedef struct Tasks {
+    Task* head;
+    Task* tail;
+} Tasks;
 
-void handle_request(PROCESS_REQUESTS* pr, PROCESS_STRUCT* process);
+int exec_command(int pid, char* arg, int fdOrchestrator);
 
-int compare_time(const void *a, const void *b);
+void handle_tasks(Tasks* tasks, int parallel_tasks, PROCESS_STRUCT* new, int* num_process_running, int fdOrchestrator);
 
-void schedule_request(PROCESS_REQUESTS* pr);
+Tasks* createLinkedList();
 
-void add_process_request(PROCESS_REQUESTS* pr, PROCESS_STRUCT* process);
+void enqueue(Tasks* list, PROCESS_STRUCT* process);
 
-void print_all_process_requests(PROCESS_REQUESTS* pr);
+void enqueueSorted(Tasks* list, PROCESS_STRUCT* process);
 
-void free_process_requests(PROCESS_REQUESTS* pr);
+PROCESS_STRUCT* dequeue(Tasks* list);
+
+void freeTasks(Tasks* list);
+
+void printLinkedList(Tasks* list);
+
 
 #endif 

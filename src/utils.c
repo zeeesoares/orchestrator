@@ -30,6 +30,13 @@ char *create_fifo(pid_t pid) {
     return fifo_name;
 }
 
+char *create_fifo_name(pid_t pid) {
+    char *fifo_name = malloc(sizeof(char) * 64);
+    sprintf(fifo_name, "tmp/FIFO_%d", pid);  // NOLINT
+
+    return fifo_name;
+}
+
 void open_fifo(int *fd, char *fifo_name, int flags) {
     *fd = open(fifo_name, flags);
 
@@ -37,6 +44,16 @@ void open_fifo(int *fd, char *fifo_name, int flags) {
         perror("open");
         exit(EXIT_FAILURE);
     }
+}
+
+void send_client_response(int pid, int request_id) {
+    int fd;
+
+    char* fifoName = create_fifo_name(pid);
+    open_fifo(&fd, fifoName, O_WRONLY);
+    
+    write(fd, &request_id, sizeof(int));
+    close(fd);
 }
 
 const char* getRequestType(REQUEST_TYPE req) {

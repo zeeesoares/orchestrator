@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
         PROCESS_STRUCT new;
         new.pid = getpid();
         new.time = atoi(argv[2]);
-        new.request = COMMAND;
+        new.request = NEW;
         strcpy(new.command, argv[4]);
 
         char *buffername = create_fifo(new.pid);
@@ -40,12 +40,16 @@ int main(int argc, char *argv[]) {
         writen_bytes = write(fd, &new, sizeof(PROCESS_STRUCT)); 
         close(fd);
 
-        unlink(buffername);
+        open_fifo(&fd,buffername,O_RDONLY);
 
-        if (writen_bytes > 0) {
-            sprintf(buffername, "Tarefa %d - Submetida!\n", new.pid);
-            write(1,buffername,MAX_BUFFER_SIZE);
+        int task_id;
+        ssize_t read_bytes = read(fd, &task_id, sizeof(int));
+        if (read_bytes > 0) {
+            printf("Tarefa %d - Submetida!\n", task_id);
         }
+
+        unlink(buffername);
+        close(fd);
     }
     else if  (!strcmp(option,"exit")) {
         if (argc < 2) {

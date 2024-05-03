@@ -41,9 +41,17 @@ void open_fifo(int *fd, char *fifo_name, int flags) {
     *fd = open(fifo_name, flags);
 
     if (*fd == -1) {
-        perror("open");
+        perror("Erro ao abrir FIFO");
         exit(EXIT_FAILURE);
     }
+}
+
+double timeval_diff(struct timeval *start, struct timeval *end) {
+    return (double)(end->tv_sec - start->tv_sec) + (double)(end->tv_usec - start->tv_usec) / 1000000.0;
+}
+
+long timeval_diff_milliseconds(struct timeval *start, struct timeval *end) {
+    return ((end->tv_sec - start->tv_sec) * 1000L + (end->tv_usec - start->tv_usec) / 1000L);
 }
 
 void send_client_response(int pid, int request_id) {

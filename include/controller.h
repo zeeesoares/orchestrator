@@ -24,7 +24,7 @@ typedef enum request_type {
   WAITING,
   RUNNING,
   FINISHED,
-  KILL,
+  WAIT,
   PIPELINE,
   EXIT
 } REQUEST_TYPE;
@@ -33,6 +33,7 @@ typedef struct PROCESS_STRUCT {
     int pid;
     int id;
     int time;
+    struct timeval start_time, end_time;
     REQUEST_TYPE request;
     char command[MAX_BUFFER_SIZE - sizeof(int) * 2];
 } PROCESS_STRUCT;
@@ -47,11 +48,15 @@ typedef struct Tasks {
     Task* tail;
 } Tasks;
 
-int exec_command(int pid, char* arg, int fdOrchestrator);
+int exec_command(int id, char* arg, int fdOrchestrator);
+
+void dispatch(PROCESS_STRUCT* process, int fdOrchestrator);
 
 void handle_tasks(Tasks* tasks, int parallel_tasks, PROCESS_STRUCT* new, int* num_process_running, int fdOrchestrator);
 
 Tasks* createLinkedList();
+
+int isEmpty(Tasks* list);
 
 void enqueue(Tasks* list, PROCESS_STRUCT* process);
 

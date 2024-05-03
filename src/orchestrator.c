@@ -20,9 +20,10 @@ int main(int argc, char *argv[]) {
 
     SCHED_POL sched_pol = getSchedPol(argv[3]);
 
-    int program_counter = 1;
+    int program_counter = 0;
 
     int fdRD, fdWR;
+
     Tasks* tasks = createLinkedList();
         
     write(STDOUT_FILENO,"Orchestrator is running...\n",28);
@@ -42,16 +43,19 @@ int main(int argc, char *argv[]) {
             if (new.request == EXIT) break;
             else if (new.request == STATUS) printLinkedList(tasks);
             else {
-                new.id = program_counter++;
-                send_client_response(new.pid,new.id);
+                if (new.request == NEW) {
+                    program_counter++;
+                    new.id = program_counter;
+                    gettimeofday(&new.start_time, NULL);
+                }
                 handle_tasks(tasks,parallel_tasks,&new,&num_process_running, fdWR);
             }
-
         }
     }
     
     close(fdRD);
     close(fdWR);
+    
     unlink(MAIN_FIFO_SERVER);
 
     freeTasks(tasks);

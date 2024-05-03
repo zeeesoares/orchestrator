@@ -4,15 +4,13 @@
 
 
 int exec_command(int id, char* arg, int fdOrchestrator) {
-    int status;
 
     char *exec_args[MAX_COMMANDS + 1]; // +1 for NULL terminator
-    int exec_ret = 0;
+    int exec_ret;
     int i = 0;
 
     char* command = strdup(arg);
     char* token;
-    char* saveptr;
 
     token = strsep(&command, " ");
     while (token != NULL && i < MAX_COMMANDS) {
@@ -22,7 +20,6 @@ int exec_command(int id, char* arg, int fdOrchestrator) {
     }
     exec_args[i] = NULL;
 
-    //MANDAR SINAL? 
 
     char filename[256];
     snprintf(filename, sizeof(filename), "tmp/task_output_%d.txt", id);
@@ -34,7 +31,7 @@ int exec_command(int id, char* arg, int fdOrchestrator) {
 
     exec_ret = execvp(exec_args[0], exec_args);
 
-    return EXIT_FAILURE;
+    return exec_ret;
 }
 
 
@@ -43,48 +40,74 @@ void dispatch(PROCESS_STRUCT* process, int fdOrchestrator) {
     
 
     if (pid_fork < 0) {
-        // Erro ao criar o processo filho
         perror("Erro ao criar processo filho");
         exit(EXIT_FAILURE);
     } else if (pid_fork == 0) {
         
-        
         int exec_ret = exec_command(process->id, process->command, fdOrchestrator);
-        _exit(exec_ret); // Saída do processo filho após execução
-    } 
+        _exit(exec_ret);
+    }
+
+    wait(NULL);
+
+    gettimeofday(&process->end_time,NULL);
+
+    PROCESS_STRUCT* new_process = (PROCESS_STRUCT*)malloc(sizeof(PROCESS_STRUCT));
+    if (new_process == NULL) {
+        fprintf(stderr, "Erro ao alocar memória para a nova solicitação de processo\n");
+        exit(EXIT_FAILURE);
+    }
+        
+    new_process->request = WAIT;
+    new_process->pid = getpid();
+
+    write(fdOrchestrator,new_process,sizeof(PROCESS_STRUCT));
+    
 }
 
 void handle_tasks(Tasks* tasks, int parallel_tasks, PROCESS_STRUCT* new, int* num_process_running, int fdOrchestrator) {
-    int status;
-    
+
     switch (new->request) {
         case NEW:
+            send_client_response(new->pid,new->id);
             if (*num_process_running < parallel_tasks) {
                 if (isEmpty(tasks)) {
-                    dispatch(new, fdOrchestrator);
-                    (*num_process_running)++;
+                    int pid = fork();
+                    if (pid == 0) {
+                        dispatch(new, fdOrchestrator);
+                        _exit(0);
+                    }
+                    (*num_process_running) += 1;
                 }
                 else {
                     enqueue(tasks, new);
                     Task* nextTask = dequeue(tasks);
-                    dispatch(nextTask->process, fdOrchestrator); 
-                    (*num_process_running)++;
+                    int pid = fork();
+                    if (pid == 0) {
+                        dispatch(nextTask->process, fdOrchestrator);
+                        _exit(0);
+                    }
+                    (*num_process_running) += 1;
                 }
             } else {
                 enqueue(tasks, new);
             }
             break;
-        case KILL:
+        case WAIT:
             wait(NULL);
-            (*num_process_running)--;
-            Task* nextTask = dequeue(tasks);
-            dispatch(nextTask->process, fdOrchestrator); 
-            (*num_process_running)++;
+            (*num_process_running) -= 1;
+            if (!isEmpty(tasks)) {
+                PROCESS_STRUCT* process = dequeue(tasks);
+                dispatch(process, fdOrchestrator); 
+                (*num_process_running)++;
+            }
             break;
         default:
             break;
     }
 }
+
+
 
 
 Tasks* createLinkedList() {
@@ -98,9 +121,15 @@ Tasks* createLinkedList() {
     return list;
 }
 
+
+
+
 int isEmpty(Tasks* list) {
     return list->head == NULL;
 }
+
+
+
 
 void enqueue(Tasks* list, PROCESS_STRUCT* process) {
     Task* newTask = (Task*)malloc(sizeof(Task));
@@ -120,15 +149,17 @@ void enqueue(Tasks* list, PROCESS_STRUCT* process) {
     newTask->next = NULL;
 
     if (list->tail == NULL) {
-        // A lista está vazia
         list->head = newTask;
         list->tail = newTask;
     } else {
-        // Adiciona o novo nó após o último nó
         list->tail->next = newTask;
         list->tail = newTask;
     }
 }
+
+
+
+
 
 void enqueueSorted(Tasks* list, PROCESS_STRUCT* process) {
     Task* newTask = (Task*)malloc(sizeof(Task));
@@ -147,57 +178,60 @@ void enqueueSorted(Tasks* list, PROCESS_STRUCT* process) {
     newTask->next = NULL;
 
     if (list->head == NULL || list->head->process->time > process->time) {
-        // Inserir no início se a lista estiver vazia ou se o tempo do novo processo for menor que o tempo do primeiro processo na lista
         newTask->next = list->head;
         list->head = newTask;
         if (list->tail == NULL) {
-            // Se a lista estava vazia, o novo nó também é o último nó
             list->tail = newTask;
         }
         return;
     }
 
-    // Procurar a posição correta para inserção
     Task* current = list->head;
     while (current->next != NULL && current->next->process->time < process->time) {
         current = current->next;
     }
 
-    newTask->next = current->next; // Inserir na posição correta
+    newTask->next = current->next;
     current->next = newTask;
     if (newTask->next == NULL) {
-        // Se o novo nó for inserido no final da lista, ele se torna o último nó
         list->tail = newTask;
     }
 }
 
 
+
+
+
 PROCESS_STRUCT* dequeue(Tasks* list) {
     if (list->head == NULL) {
-        // A lista está vazia
         return NULL;
     }
     Task* temp = list->head;
     PROCESS_STRUCT* process = temp->process;
     list->head = temp->next;
     if (list->head == NULL) {
-        // A lista agora está vazia, então o tail também deve ser NULL
         list->tail = NULL;
     }
     free(temp);
     return process;
 }
 
+
+
+
 void freeTasks(Tasks* list) {
     Task* current = list->head;
     while (current != NULL) {
         Task* next = current->next;
-        free(current->process); // Libera a memória alocada para a estrutura de processos
-        free(current); // Libera a memória alocada para o nó
+        free(current->process);
+        free(current);
         current = next;
     }
-    free(list); // Libera a memória alocada para a lista ligada
+    free(list);
 }
+
+
+
 
 void printLinkedList(Tasks* list) {
     if (list->head == NULL) {
@@ -208,41 +242,10 @@ void printLinkedList(Tasks* list) {
     Task* current = list->head;
     printf("Processos na lista ligada:\n");
     while (current != NULL) {
-        printf("PID: %d, Tempo: %d, Comando: %s\n", current->process->pid, current->process->time, current->process->command);
+        printf("ID: %d, Tempo: %d, Comando: %s\n", current->process->id, current->process->time, current->process->command);
         current = current->next;
     }
 }
-
-
-
-/*
-void controller(PROCESS_REQUESTS* pr, int parallelTasks) {
-    int program_counter = 0;
-    int executed_programs = 0;
-    int programs_in_queue = pr->current_index + 1;
-
-    while (executed_programs < programs_in_queue) {
-        while (program_counter < parallelTasks && executed_programs < programs_in_queue) {
-            pid_t exec_prog = fork();
-            if (exec_prog == 0) {
-                int res = exec_command(pr->requests[executed_programs]->pid,pr->requests[executed_programs]->command);
-                _exit(EXIT_FAILURE);
-            }
-            executed_programs++;
-            program_counter++;
-            wait(NULL);
-            //MANDAR SINAL?
-
-            program_counter--;
-        }
-    }
-
-    while (program_counter > 0) {
-        wait(NULL);
-        program_counter--;
-    }
-}
-*/
 
 
 // while (i < img) {

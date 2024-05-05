@@ -8,12 +8,13 @@ fi
 
 # Extrai os argumentos
 num_execucoes="$1"
-tempo="$2"
-comando="$3"
+tipo="$2"
+tempo="$3"
+comando="$4"
 shift 3  # Remove os três primeiros argumentos (número de execuções, tempo e comando)
 
 # Loop para executar o comando o número de vezes especificado
 for ((i = 0; i < num_execucoes; i++)); do
     # Executa o comando
-    ./bin/client execute "$tempo" -u "$comando" "$@"
+    ./bin/client execute "$tempo" "$tipo" "$comando" "$@"
 done

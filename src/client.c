@@ -19,6 +19,7 @@ int main(int argc, char *argv[]) {
     }
 
     char* option = argv[1];
+    char* pipe = argv[3];
 
     if (!strcmp(option,"execute")) {
         if (argc < 5) {
@@ -31,7 +32,16 @@ int main(int argc, char *argv[]) {
         PROCESS_STRUCT new;
         new.pid = getpid();
         new.time = atoi(argv[2]);
-        new.request = NEW;
+        if (!strcmp(pipe,"-u")) {
+            new.request = NEW;
+        }
+        else if (!strcmp(pipe,"-p")){
+            new.request = PIPELINE;
+        }
+        else {
+            perror("Opção inválida!\n");
+            exit(EXIT_FAILURE);
+        }
         strcpy(new.command, argv[4]);
 
         char *buffername = create_fifo(new.pid);
@@ -116,6 +126,8 @@ int main(int argc, char *argv[]) {
         while ((read_bytes = read(fd_client, buffer, MAX_RESPONSE_SIZE)) > 0) {
             write(1, buffer, read_bytes);
         }
+
+        unlink(buffername);
 
         // Fechar o FIFO do cliente
         close(fd_client);

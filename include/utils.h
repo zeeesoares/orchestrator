@@ -20,9 +20,17 @@ void send_client_response(int pid, int request_id);
 
 void open_fifo(int *fd, char *fifo_name, int flags);
 
-double timeval_diff(struct timeval *start, struct timeval *end);
+double timeval_diff_seconds(struct timeval *start, struct timeval *end);
+
+double timeval_to_ms(struct timeval *time);
+
+double timeval_diff_microseconds(struct timeval *start, struct timeval *end);
 
 long timeval_diff_milliseconds(struct timeval *start, struct timeval *end);
+
+int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y);
+
+double timeval_to_ms(struct timeval *time);
 
 const char* getRequestType(REQUEST_TYPE req);
 

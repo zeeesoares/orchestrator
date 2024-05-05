@@ -69,13 +69,13 @@ int main(int argc, char *argv[]) {
                     int fdClient;
                     char* clientFIFO = create_fifo_name(new.pid);
                     open_fifo(&fdClient,clientFIFO, O_WRONLY);
-                    handle_status_request(fdClient,task_lists.running_tasks,task_lists.scheduled_tasks,task_lists.completed_tasks);
+                    handle_status_request(fdClient,fdWR,task_lists.running_tasks,task_lists.scheduled_tasks,task_lists.completed_tasks);
                     close(fdClient);
                     _exit(0);
                 }
             }
             else {
-                if (new.request == NEW) {
+                if (new.request == NEW || new.request == PIPELINE) {
                     program_counter++;
                     printf("%d\n", program_counter);
                     new.id = program_counter;

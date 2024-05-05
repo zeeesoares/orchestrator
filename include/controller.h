@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 
 
@@ -38,7 +39,7 @@ typedef struct PROCESS_STRUCT {
     int pid;
     int id;
     int time;
-    struct timeval start_time, end_time;
+    struct timeval start_time, end_time, total_time;
     REQUEST_TYPE request;
     char command[MAX_BUFFER_SIZE - sizeof(int) * 2];
 } PROCESS_STRUCT;
@@ -66,7 +67,7 @@ int exec_pipeline(int id, char* arg, char* output_folder);
 
 int exec_command(int id, char* arg, char* output_folder);
 
-void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder);
+void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder, int (*exec_function)(int, char*, char*));
 
 void handle_tasks(TaskLists* tasks, int parallel_tasks, PROCESS_STRUCT* new, int* num_process_running, int fdOrchestrator, int fd_result, char* output_folder,  void (*enqueue_func)(Tasks*, PROCESS_STRUCT*));
 
@@ -92,6 +93,6 @@ void create_status_buffer(char* buffer, const char* title, Tasks* list);
 
 void status_to_buffer(char* buffer, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks);
 
-void handle_status_request(int fdClient, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks);
+void handle_status_request(int fdClient, int fdOrchestrator, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks);
 
 #endif 

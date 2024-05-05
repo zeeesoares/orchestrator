@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <controller.h>
+#include "controller.h"
 
 #define MAIN_FIFO_SERVER "tmp/FIFO_SERVER"
 
@@ -20,6 +20,12 @@ void send_client_response(int pid, int request_id);
 
 void open_fifo(int *fd, char *fifo_name, int flags);
 
+double timeval_diff(struct timeval *start, struct timeval *end);
+
+long timeval_diff_milliseconds(struct timeval *start, struct timeval *end);
+
 const char* getRequestType(REQUEST_TYPE req);
+
+SCHED_POL getSchedPol(char* arg);
 
 #endif

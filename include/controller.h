@@ -16,15 +16,20 @@
 #define MAX_BUFFER_SIZE 300
 #define MAX_COMMANDS 10
 #define MAX_REQUESTS 100
+#define MAX_RESPONSE_SIZE 300
+
+#define COMPLETED_TASKS_FILE "completed_tasks.txt"
+
+typedef enum SCHED_POL {
+    FCFS,
+    SJF
+} SCHED_POL;
 
 typedef enum request_type {
-  COMMAND,
   NEW,
   STATUS,
-  WAITING,
-  RUNNING,
-  FINISHED,
   WAIT,
+  WAITSTATUS,
   PIPELINE,
   EXIT
 } REQUEST_TYPE;
@@ -48,11 +53,22 @@ typedef struct Tasks {
     Task* tail;
 } Tasks;
 
-int exec_command(int id, char* arg, int fdOrchestrator);
+typedef struct {
+    Tasks* running_tasks;
+    Tasks* scheduled_tasks;
+    Tasks* completed_tasks;
+} TaskLists;
 
-void dispatch(PROCESS_STRUCT* process, int fdOrchestrator);
 
-void handle_tasks(Tasks* tasks, int parallel_tasks, PROCESS_STRUCT* new, int* num_process_running, int fdOrchestrator);
+int parse_pipeline(char *pipeline, char **commands);
+
+int exec_pipeline(int id, char* arg, char* output_folder);
+
+int exec_command(int id, char* arg, char* output_folder);
+
+void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder);
+
+void handle_tasks(TaskLists* tasks, int parallel_tasks, PROCESS_STRUCT* new, int* num_process_running, int fdOrchestrator, int fd_result, char* output_folder,  void (*enqueue_func)(Tasks*, PROCESS_STRUCT*));
 
 Tasks* createLinkedList();
 
@@ -64,9 +80,18 @@ void enqueueSorted(Tasks* list, PROCESS_STRUCT* process);
 
 PROCESS_STRUCT* dequeue(Tasks* list);
 
+PROCESS_STRUCT* dequeueById(Tasks* list, int id);
+
 void freeTasks(Tasks* list);
 
 void printLinkedList(Tasks* list);
 
+void append_tasks_info(char* buffer, Task* current);
+
+void create_status_buffer(char* buffer, const char* title, Tasks* list);
+
+void status_to_buffer(char* buffer, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks);
+
+void handle_status_request(int fdClient, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks);
 
 #endif 

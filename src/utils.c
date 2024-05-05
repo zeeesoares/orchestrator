@@ -47,12 +47,15 @@ void open_fifo(int *fd, char *fifo_name, int flags) {
 }
 
 double timeval_diff(struct timeval *start, struct timeval *end) {
-    return (double)(end->tv_sec - start->tv_sec) + (double)(end->tv_usec - start->tv_usec) / 1000000.0;
+    return ((double)(end->tv_sec - start->tv_sec) * 1000.0) + ((double)(end->tv_usec - start->tv_usec) / 1000.0);
 }
 
 long timeval_diff_milliseconds(struct timeval *start, struct timeval *end) {
-    return ((end->tv_sec - start->tv_sec) * 1000L + (end->tv_usec - start->tv_usec) / 1000L);
+    long seconds_diff = (end->tv_sec - start->tv_sec) * 1000;
+    long microseconds_diff = (end->tv_usec - start->tv_usec) / 1000;
+    return seconds_diff + microseconds_diff;
 }
+
 
 void send_client_response(int pid, int request_id) {
     int fd;
@@ -68,7 +71,6 @@ const char* getRequestType(REQUEST_TYPE req) {
     switch (req) 
     {
         case NEW: return "New";
-        case COMMAND: return "Command";
         case STATUS: return "Status";
         case PIPELINE: return "Pipeline";
         case EXIT: return "Exit";

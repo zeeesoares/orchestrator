@@ -2,6 +2,10 @@
     "files.associations": {
         "fcntl.h": "c",
         "types.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "utils.h": "c",
+        "stat.h": "c",
+        "client.h": "c",
+        "controller.h": "c"
     }
 }

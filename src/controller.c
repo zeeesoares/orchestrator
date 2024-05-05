@@ -1,9 +1,25 @@
 #include "controller.h"
 #include "utils.h"
 
+int parse_pipeline(char *pipeline, char **commands) {
+    int num_commands = 0;
+    char *token;
+
+    while ((token = strsep(&pipeline, "|")) != NULL) {
+        if (*token != NULL) {
+            commands[num_commands] = strdup(token);
+            if (commands[num_commands] == NULL) {
+                perror("Erro ao alocar memória");
+                exit(EXIT_FAILURE);
+            }
+            num_commands++;
+        }
+    }
+    return num_commands;
+}
 
 
-int exec_command(int id, char* arg, int fdOrchestrator) {
+int exec_command(int id, char* arg, char* output_folder) {
 
     char *exec_args[MAX_COMMANDS + 1]; // +1 for NULL terminator
     int exec_ret;
@@ -22,7 +38,7 @@ int exec_command(int id, char* arg, int fdOrchestrator) {
 
 
     char filename[256];
-    snprintf(filename, sizeof(filename), "tmp/task_output_%d.txt", id);
+    snprintf(filename, sizeof(filename), "%s/task_output_%d.txt", output_folder, id);
         
     int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     dup2(fd, 1);
@@ -35,7 +51,69 @@ int exec_command(int id, char* arg, int fdOrchestrator) {
 }
 
 
-void dispatch(PROCESS_STRUCT* process, int fdOrchestrator) {
+int exec_pipeline(int id, char* arg, char* output_folder) {
+    int status;
+    char * commands[] = {
+		"grep -v ^# /etc/passwd",
+		"cut -f7 -d:",
+		"uniq",
+		"wc -l"
+	};
+    int number_of_commands = 4;
+    int number_of_pipes = number_of_commands - 1;
+    pid_t pids[number_of_commands];
+    int pipes[number_of_pipes][2];
+    pid_t pid;
+
+    for (int i = 0; i < number_of_commands; i++) {
+        if (i < number_of_pipes) pipe(pipes[i]);
+        pids[i] = fork();
+        if (pids[i] == -1) {
+            perror("Erro ao criar processo filho");
+            exit(EXIT_FAILURE);
+        } else if (pids[i] == 0) {
+            // Processo filho
+            if (i == 0) {
+                close(pipes[i][0]);  
+                dup2(pipes[i][1], STDOUT_FILENO);
+                close(pipes[i][1]);
+                exec_command(id,commands[i],output_folder);
+                _exit(EXIT_FAILURE);
+            } else if (i == number_of_commands - 1) {
+                close(pipes[i - 1][1]);
+                dup2(pipes[i - 1][0], STDIN_FILENO); 
+                close(pipes[i - 1][0]); 
+                exec_command(id,commands[i],output_folder);
+                _exit(EXIT_FAILURE);
+            } else {
+                dup2(pipes[i - 1][0], STDIN_FILENO);
+                dup2(pipes[i][1], STDOUT_FILENO); 
+                close(pipes[i-1][0]); 
+                close(pipes[i][1]); 
+                close(pipes[i][0]);
+                exec_command(id,commands[i],output_folder);
+                _exit(EXIT_FAILURE);
+            }
+        } else {
+            if (i == 0) {
+                close(pipes[i][1]);  
+            } else if (i == number_of_commands - 1) {
+                close(pipes[i-1][0]); 
+            } else {
+                close(pipes[i-1][0]);
+                close(pipes[i][1]);
+            }
+        }
+    }
+
+    for (int i = 0; i < number_of_commands; i++) {
+        waitpid(pids[i], &status, 0);
+    }
+
+    return 0;
+}
+
+void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder) {
     pid_t pid_fork = fork();
     
 
@@ -44,12 +122,11 @@ void dispatch(PROCESS_STRUCT* process, int fdOrchestrator) {
         exit(EXIT_FAILURE);
     } else if (pid_fork == 0) {
         
-        int exec_ret = exec_command(process->id, process->command, fdOrchestrator);
+        int exec_ret = exec_command(process->id, process->command, output_folder);
         _exit(exec_ret);
     }
 
     wait(NULL);
-
     gettimeofday(&process->end_time,NULL);
 
     PROCESS_STRUCT* new_process = (PROCESS_STRUCT*)malloc(sizeof(PROCESS_STRUCT));
@@ -57,58 +134,73 @@ void dispatch(PROCESS_STRUCT* process, int fdOrchestrator) {
         fprintf(stderr, "Erro ao alocar memória para a nova solicitação de processo\n");
         exit(EXIT_FAILURE);
     }
+
+    memcpy(new_process, process, sizeof(PROCESS_STRUCT));
         
     new_process->request = WAIT;
-    new_process->pid = getpid();
-
     write(fdOrchestrator,new_process,sizeof(PROCESS_STRUCT));
     
 }
 
-void handle_tasks(Tasks* tasks, int parallel_tasks, PROCESS_STRUCT* new, int* num_process_running, int fdOrchestrator) {
+
+void handle_tasks(
+    TaskLists* tasks, int parallel_tasks, PROCESS_STRUCT* new,
+    int* num_process_running, int fdOrchestrator, int fd_result,
+    char* output_folder, void (*enqueue_func)(Tasks*, PROCESS_STRUCT*)) {
 
     switch (new->request) {
         case NEW:
-            send_client_response(new->pid,new->id);
             if (*num_process_running < parallel_tasks) {
-                if (isEmpty(tasks)) {
+                if (isEmpty(tasks->scheduled_tasks)) {
                     int pid = fork();
                     if (pid == 0) {
-                        dispatch(new, fdOrchestrator);
+                        dispatch(new, fdOrchestrator, output_folder);
                         _exit(0);
                     }
+                    enqueue_func(tasks->running_tasks,new);
                     (*num_process_running) += 1;
                 }
                 else {
-                    enqueue(tasks, new);
-                    Task* nextTask = dequeue(tasks);
+                    enqueue_func(tasks->scheduled_tasks, new);
+                    PROCESS_STRUCT* nextTask = dequeue(tasks->scheduled_tasks);
                     int pid = fork();
                     if (pid == 0) {
-                        dispatch(nextTask->process, fdOrchestrator);
+                        dispatch(nextTask, fdOrchestrator, output_folder);
                         _exit(0);
                     }
+                    enqueue_func(tasks->running_tasks,nextTask);
                     (*num_process_running) += 1;
                 }
             } else {
-                enqueue(tasks, new);
+                enqueue_func(tasks->scheduled_tasks, new);
             }
             break;
         case WAIT:
             wait(NULL);
+            PROCESS_STRUCT* completedTask = dequeueById(tasks->running_tasks, new->id);
+
+            char completed_message[512];
+            double diff_ms = timeval_diff(&completedTask->start_time, &completedTask->end_time);
+            snprintf(completed_message, sizeof(completed_message), "%d %s %.2f ms\n", completedTask->id, completedTask->command, diff_ms);
+
+            write(fd_result, completed_message, strlen(completed_message));
+
+            enqueue_func(tasks->completed_tasks, completedTask);
             (*num_process_running) -= 1;
-            if (!isEmpty(tasks)) {
-                PROCESS_STRUCT* process = dequeue(tasks);
-                dispatch(process, fdOrchestrator); 
+            if (!isEmpty(tasks->scheduled_tasks)) {
+                PROCESS_STRUCT* process = dequeue(tasks->scheduled_tasks);
+                int pid = fork();
+                if (pid == 0) {
+                    dispatch(process, fdOrchestrator, output_folder); 
+                    _exit(0);
+                }
+                enqueue_func(tasks->running_tasks, process);
                 (*num_process_running)++;
             }
             break;
-        default:
-            break;
+
     }
 }
-
-
-
 
 Tasks* createLinkedList() {
     Tasks* list = (Tasks*)malloc(sizeof(Tasks));
@@ -122,13 +214,9 @@ Tasks* createLinkedList() {
 }
 
 
-
-
 int isEmpty(Tasks* list) {
     return list->head == NULL;
 }
-
-
 
 
 void enqueue(Tasks* list, PROCESS_STRUCT* process) {
@@ -159,8 +247,6 @@ void enqueue(Tasks* list, PROCESS_STRUCT* process) {
 
 
 
-
-
 void enqueueSorted(Tasks* list, PROCESS_STRUCT* process) {
     Task* newTask = (Task*)malloc(sizeof(Task));
     if (newTask == NULL) {
@@ -187,7 +273,8 @@ void enqueueSorted(Tasks* list, PROCESS_STRUCT* process) {
     }
 
     Task* current = list->head;
-    while (current->next != NULL && current->next->process->time < process->time) {
+    // Move para o próximo nó com tempo igual ou maior
+    while (current->next != NULL && current->next->process->time <= process->time) {
         current = current->next;
     }
 
@@ -197,9 +284,6 @@ void enqueueSorted(Tasks* list, PROCESS_STRUCT* process) {
         list->tail = newTask;
     }
 }
-
-
-
 
 
 PROCESS_STRUCT* dequeue(Tasks* list) {
@@ -217,6 +301,38 @@ PROCESS_STRUCT* dequeue(Tasks* list) {
 }
 
 
+PROCESS_STRUCT* dequeueById(Tasks* list, int id) {
+    if (list->head == NULL) {
+        return NULL;
+    }
+
+    Task* current = list->head;
+    Task* prev = NULL;
+
+    while (current != NULL && current->process->id != id) {
+        prev = current;
+        current = current->next;
+    }
+
+    if (current == NULL) {
+        return NULL;
+    }
+
+    if (prev != NULL) {
+        prev->next = current->next;
+    } else {
+        list->head = current->next;
+    }
+
+    if (current == list->tail) {
+        list->tail = prev;
+    }
+
+    PROCESS_STRUCT* process = current->process;
+    free(current);
+
+    return process;
+}
 
 
 void freeTasks(Tasks* list) {
@@ -231,8 +347,6 @@ void freeTasks(Tasks* list) {
 }
 
 
-
-
 void printLinkedList(Tasks* list) {
     if (list->head == NULL) {
         printf("A lista está vazia.\n");
@@ -242,9 +356,49 @@ void printLinkedList(Tasks* list) {
     Task* current = list->head;
     printf("Processos na lista ligada:\n");
     while (current != NULL) {
-        printf("ID: %d, Tempo: %d, Comando: %s\n", current->process->id, current->process->time, current->process->command);
+        printf("ID: %d, Comando: %s\n", current->process->id, current->process->command);
         current = current->next;
     }
+}
+
+void sendProcessState(int fdClient, int id, const char* command) {
+    char message[MAX_RESPONSE_SIZE];
+    snprintf(message, sizeof(message), "%d %s\n", id, command);
+    write(fdClient, message, strlen(message));
+}
+
+
+void sendLinkedList(Tasks* list, int fdClient) {
+    if (list->head == NULL) {
+        char message[MAX_RESPONSE_SIZE];
+        snprintf(message, sizeof(message), "A lista está vazia.\n");
+        write(fdClient, message, strlen(message));
+        return;
+    }
+
+    Task* current = list->head;
+    while (current != NULL) {
+        sendProcessState(fdClient, current->process->id, current->process->command);
+        current = current->next;
+    }
+}
+
+void handle_status_request(int fdClient, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks) {
+    int fork_status = fork();
+
+    if (fork_status == 0) {
+        write(fdClient,"Executing:\n",11);
+        sendLinkedList(running_tasks, fdClient);
+
+        write(fdClient,"\nScheduled:\n",13);
+        sendLinkedList(scheduled_tasks, fdClient);
+
+        write(fdClient,"\nCompleted:\n",13);
+        sendLinkedList(completed_tasks, fdClient);
+
+        _exit(0);
+    }
+    wait(NULL);
 }
 
 

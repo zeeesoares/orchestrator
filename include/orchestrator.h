@@ -17,9 +17,4 @@
 #include "controller.h"
 
 
-typedef enum SCHED_POL {
-    FCFS,
-    SJF
-} SCHED_POL;
-
 #endif 

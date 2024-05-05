@@ -6,7 +6,7 @@ int parse_pipeline(char *pipeline, char **commands) {
     char *token;
 
     while ((token = strsep(&pipeline, "|")) != NULL) {
-        if (*token != NULL) {
+        if (*token != '\0') {
             commands[num_commands] = strdup(token);
             if (commands[num_commands] == NULL) {
                 perror("Erro ao alocar memória");
@@ -86,7 +86,6 @@ int exec_pipeline(int id, char* arg, char* output_folder) {
     int number_of_pipes = number_of_commands - 1;
     pid_t pids[number_of_commands];
     int pipes[number_of_pipes][2];
-    pid_t pid;
 
     char filename[256];
     snprintf(filename, sizeof(filename), "%s/task_output_%d.txt", output_folder, id);

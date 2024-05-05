@@ -77,7 +77,6 @@ int main(int argc, char *argv[]) {
             else {
                 if (new.request == NEW || new.request == PIPELINE) {
                     program_counter++;
-                    printf("%d\n", program_counter);
                     new.id = program_counter;
                     send_client_response(new.pid,new.id);
                     gettimeofday(&new.start_time, NULL);

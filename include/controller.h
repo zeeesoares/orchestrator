@@ -39,7 +39,8 @@ typedef struct PROCESS_STRUCT {
     int pid;
     int id;
     int time;
-    struct timeval start_time, end_time, total_time;
+    struct timeval start_time, end_time;
+    double total_time;
     REQUEST_TYPE request;
     char command[MAX_BUFFER_SIZE - sizeof(int) * 2];
 } PROCESS_STRUCT;
@@ -94,5 +95,13 @@ void create_status_buffer(char* buffer, const char* title, Tasks* list);
 void status_to_buffer(char* buffer, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks);
 
 void handle_status_request(int fdClient, int fdOrchestrator, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks);
+
+void sendProcessState(int fdClient, int id, const char* command);
+
+void sendProcessStateCompleted(int fdClient, int id, const char* command, double time);
+
+void sendLinkedList(Tasks* list, int fdClient);
+
+void sendLinkedListCompleted(Tasks* list, int fdClient);
 
 #endif 

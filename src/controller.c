@@ -78,9 +78,9 @@ int exec_command_pipe(char* arg){
 	return exec_ret;
 }
 
-int exec_pipeline(int id, char* arg, char* output_folder) {
+int exec_pipeline(int id, char *arg, char *output_folder) {
     int status;
-    char* commands[MAX_COMMANDS];
+    char *commands[MAX_COMMANDS];
     int number_of_commands = parse_pipeline(arg, commands);
 
     int number_of_pipes = number_of_commands - 1;
@@ -90,7 +90,8 @@ int exec_pipeline(int id, char* arg, char* output_folder) {
     char filename[256];
     snprintf(filename, sizeof(filename), "%s/task_output_%d.txt", output_folder, id);
         
-    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd_out = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd_err = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644); // Abrir o arquivo em modo de adição para manter mensagens de erro anteriores
     
     for (int i = 0; i < number_of_commands; i++) {
         if (i < number_of_pipes) pipe(pipes[i]);
@@ -103,16 +104,17 @@ int exec_pipeline(int id, char* arg, char* output_folder) {
             if (i == 0) {
                 close(pipes[i][0]);
                 dup2(pipes[i][1], STDOUT_FILENO);
+                dup2(fd_err, STDERR_FILENO); // Redireciona saída de erro para o mesmo arquivo de saída
                 close(pipes[i][1]);
+                close(fd_err);
                 exec_command_pipe(commands[i]);
                 _exit(EXIT_SUCCESS); // Termina a execução do processo filho
             } else if (i == number_of_commands - 1) {
                 close(pipes[i - 1][1]);
                 dup2(pipes[i - 1][0], STDIN_FILENO);
                 close(pipes[i - 1][0]);
-                dup2(fd, 1);
-                dup2(fd, 2);
-                close(fd);
+                dup2(fd_out, STDOUT_FILENO);
+                close(fd_out);
                 exec_command_pipe(commands[i]);
                 _exit(EXIT_SUCCESS); // Termina a execução do processo filho
             } else {
@@ -143,7 +145,6 @@ int exec_pipeline(int id, char* arg, char* output_folder) {
     return 0;
 }
 
-
 void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder, int (*exec_function)(int, char*, char*)) {
     pid_t pid_fork = fork();
     
@@ -152,15 +153,19 @@ void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder, 
         perror("Erro ao criar processo filho");
         exit(EXIT_FAILURE);
     } else if (pid_fork == 0) {
-        
         int exec_ret = exec_function(process->id, process->command, output_folder);
-        _exit(exec_ret);
+        _exit(exec_ret); // Usando _exit para evitar a execução do código após exec
     }
 
+    // Processo pai
     wait(NULL);
 
+    // Cálculo do tempo total
+    gettimeofday(&process->end_time, NULL);
+    double total_time = timeval_diff_milliseconds(&process->start_time, &process->end_time);
 
-    PROCESS_STRUCT* new_process = (PROCESS_STRUCT*)malloc(sizeof(PROCESS_STRUCT));
+    // Criação de uma cópia do processo para atualizar os tempos
+    PROCESS_STRUCT* new_process = malloc(sizeof(PROCESS_STRUCT));
     if (new_process == NULL) {
         fprintf(stderr, "Erro ao alocar memória para a nova solicitação de processo\n");
         exit(EXIT_FAILURE);
@@ -168,12 +173,13 @@ void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder, 
 
     memcpy(new_process, process, sizeof(PROCESS_STRUCT));
     new_process->request = WAIT;
+    new_process->total_time = total_time;
 
-    gettimeofday(&new_process->end_time, NULL);
-    timeval_subtract(&new_process->total_time, &new_process->start_time,  &new_process->end_time);
+    // Escrever o processo atualizado de volta ao orchestrator
+    write(fdOrchestrator, new_process, sizeof(PROCESS_STRUCT));
 
-    write(fdOrchestrator,new_process,sizeof(PROCESS_STRUCT));
-    
+    // Libera a memória alocada para a nova estrutura de processo
+    free(new_process);
 }
 
 
@@ -243,11 +249,11 @@ void handle_tasks(
             char completed_message[512];
 
     
-            snprintf(completed_message, sizeof(completed_message), "%d %s %.2f ms\n", completedTask->id, completedTask->command, timeval_to_ms(&completedTask->total_time));
+            snprintf(completed_message, sizeof(completed_message), "%d %s %.2f ms\n", new->id, new->command, new->total_time);
 
             write(fd_result, completed_message, strlen(completed_message));
 
-            enqueue_func(tasks->completed_tasks, completedTask);
+            enqueue_func(tasks->completed_tasks, new);
             (*num_process_running) -= 1;
             if (!isEmpty(tasks->scheduled_tasks)) {
                 PROCESS_STRUCT* process = dequeue(tasks->scheduled_tasks);
@@ -436,6 +442,12 @@ void sendProcessState(int fdClient, int id, const char* command) {
     write(fdClient, message, strlen(message));
 }
 
+void sendProcessStateCompleted(int fdClient, int id, const char* command, double time) {
+    char message[MAX_RESPONSE_SIZE];
+    snprintf(message, sizeof(message), "%d %s %.2f ms\n", id, command, time);
+    write(fdClient, message, strlen(message));
+}
+
 
 void sendLinkedList(Tasks* list, int fdClient) {
     if (list->head == NULL) {
@@ -452,6 +464,21 @@ void sendLinkedList(Tasks* list, int fdClient) {
     }
 }
 
+void sendLinkedListCompleted(Tasks* list, int fdClient) {
+    if (list->head == NULL) {
+        char message[MAX_RESPONSE_SIZE];
+        snprintf(message, sizeof(message), "A lista está vazia.\n");
+        write(fdClient, message, strlen(message));
+        return;
+    }
+
+    Task* current = list->head;
+    while (current != NULL) {
+        sendProcessStateCompleted(fdClient, current->process->id, current->process->command, current->process->total_time);
+        current = current->next;
+    }
+}
+
 void handle_status_request(int fdClient, int fdOrchestrator, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks) {
     int fork_status = fork();
 
@@ -463,7 +490,7 @@ void handle_status_request(int fdClient, int fdOrchestrator, Tasks* running_task
         sendLinkedList(scheduled_tasks, fdClient);
 
         write(fdClient,"\nCompleted:\n",13);
-        sendLinkedList(completed_tasks, fdClient);
+        sendLinkedListCompleted(completed_tasks, fdClient);
 
         _exit(0);
     }

@@ -8,8 +8,8 @@ fi
 
 # Extrai os argumentos
 num_execucoes="$1"
-tipo="$2"
-tempo="$3"
+tempo="$2"
+tipo="$3"
 comando="$4"
 shift 3  # Remove os três primeiros argumentos (número de execuções, tempo e comando)
 

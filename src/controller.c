@@ -1,6 +1,13 @@
 #include "controller.h"
 #include "utils.h"
 
+/**
+ * Função responsável por dividir a pipeline em comandos individuais.
+ *
+ * @param pipeline String contendo a pipeline de comandos.
+ * @param commands Array de strings que irá armazenar os comandos individuais.
+ * @return O número de comandos encontrados na pipeline.
+ */
 int parse_pipeline(char *pipeline, char **commands) {
     int num_commands = 0;
     char *token;
@@ -19,6 +26,14 @@ int parse_pipeline(char *pipeline, char **commands) {
 }
 
 
+/**
+ * Função responsável por executar um comando individual.
+ *
+ * @param id O identificador único do comando.
+ * @param arg O argumento contendo o comando a ser executado.
+ * @param output_folder O diretório de saída onde os resultados serão armazenados.
+ * @return O código de retorno da execução do comando.
+ */
 int exec_command(int id, char* arg, char* output_folder) {
 
     char *exec_args[MAX_COMMANDS + 1]; // +1 for NULL terminator
@@ -52,6 +67,13 @@ int exec_command(int id, char* arg, char* output_folder) {
 }
 
 
+
+/**
+ * Função responsável por executar um comando de uma pipeline.
+ *
+ * @param arg A string contendo o comando a ser executado.
+ * @return O código de retorno da execução do comando.
+ */
 int exec_command_pipe(char* arg){
 
 	//Estamos a assumir numero maximo de argumentos
@@ -78,6 +100,15 @@ int exec_command_pipe(char* arg){
 	return exec_ret;
 }
 
+
+/**
+ * Função responsável por executar uma pipeline de comandos.
+ *
+ * @param id O identificador único da pipeline.
+ * @param arg A string contendo a pipeline de comandos.
+ * @param output_folder O diretório de saída onde os resultados serão armazenados.
+ * @return 0 se a execução for bem-sucedida, caso contrário retorna um valor negativo.
+ */
 int exec_pipeline(int id, char *arg, char *output_folder) {
     int status;
     char *commands[MAX_COMMANDS];
@@ -145,6 +176,16 @@ int exec_pipeline(int id, char *arg, char *output_folder) {
     return 0;
 }
 
+
+
+/**
+ * Função responsável por despachar um processo para execução.
+ *
+ * @param process A estrutura de dados contendo informações sobre o processo a ser executado.
+ * @param fdOrchestrator O descritor de arquivo para comunicar com o orquestrador.
+ * @param output_folder O diretório de saída onde os resultados serão armazenados.
+ * @param exec_function O ponteiro para a função de execução do comando.
+ */
 void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder, int (*exec_function)(int, char*, char*)) {
     pid_t pid_fork = fork();
     
@@ -178,11 +219,24 @@ void dispatch(PROCESS_STRUCT* process, int fdOrchestrator, char* output_folder, 
     // Escrever o processo atualizado de volta ao orchestrator
     write(fdOrchestrator, new_process, sizeof(PROCESS_STRUCT));
 
-    // Libera a memória alocada para a nova estrutura de processo
+    // Liberta a memória alocada para a nova estrutura de processo
     free(new_process);
 }
 
 
+
+/**
+ * Função responsável por manipular as tarefas recebidas pelo orquestrador.
+ *
+ * @param tasks As listas de tarefas agendadas, em execução e concluídas.
+ * @param parallel_tasks O número máximo de tarefas paralelas permitidas.
+ * @param new A estrutura de dados contendo informações sobre a nova tarefa a ser manipulada.
+ * @param num_process_running O número atual de processos em execução.
+ * @param fdOrchestrator O descritor de arquivo para comunicar com o orquestrador.
+ * @param fd_result O descritor de arquivo para armazenar os resultados das tarefas.
+ * @param output_folder A diretoria de saída onde os resultados serão armazenados.
+ * @param enqueue_func O apontador para a função de enfileiramento de tarefas.
+ */
 void handle_tasks(
     TaskLists* tasks, int parallel_tasks, PROCESS_STRUCT* new,
     int* num_process_running, int fdOrchestrator, int fd_result,
@@ -245,7 +299,7 @@ void handle_tasks(
         case WAIT:
             wait(NULL);
             PROCESS_STRUCT* completedTask = dequeueById(tasks->running_tasks, new->id);
-
+            free(completedTask);
             char completed_message[512];
 
     
@@ -274,9 +328,17 @@ void handle_tasks(
             int status = 0;
             waitpid(new->pid,&status,0);
             break;
+        default: 
+            break; 
     }
 }
 
+
+/**
+ * Função responsável por criar uma lista ligada para armazenar tarefas.
+ *
+ * @return Um ponteiro para a lista ligada criada.
+ */
 Tasks* createLinkedList() {
     Tasks* list = (Tasks*)malloc(sizeof(Tasks));
     if (list == NULL) {
@@ -289,11 +351,24 @@ Tasks* createLinkedList() {
 }
 
 
+
+/**
+ * Função responsável por verificar se uma lista ligada está vazia.
+ *
+ * @param list A lista ligada a ser verificada.
+ * @return 1 se a lista estiver vazia, 0 caso contrário.
+ */
 int isEmpty(Tasks* list) {
     return list->head == NULL;
 }
 
 
+/**
+ * Função responsável por adicionar uma nova tarefa numa lista ligada.
+ *
+ * @param list A lista ligada onde a tarefa será enfileirada.
+ * @param process A estrutura de dados que contém informações sobre taredas.
+ */
 void enqueue(Tasks* list, PROCESS_STRUCT* process) {
     Task* newTask = (Task*)malloc(sizeof(Task));
     if (newTask == NULL) {
@@ -321,7 +396,12 @@ void enqueue(Tasks* list, PROCESS_STRUCT* process) {
 }
 
 
-
+/**
+ * Função responsável por adicionar uma nova tarefa numa lista ligada, mantendo-a ordenada pelo tempo de execução.
+ *
+ * @param list A lista ligada onde a tarefa será enfileirada.
+ * @param process A estrutura de dados contendo informações sobre a tarefa a adicionada.
+ */
 void enqueueSorted(Tasks* list, PROCESS_STRUCT* process) {
     Task* newTask = (Task*)malloc(sizeof(Task));
     if (newTask == NULL) {
@@ -348,7 +428,6 @@ void enqueueSorted(Tasks* list, PROCESS_STRUCT* process) {
     }
 
     Task* current = list->head;
-    // Move para o próximo nó com tempo igual ou maior
     while (current->next != NULL && current->next->process->time <= process->time) {
         current = current->next;
     }
@@ -360,7 +439,12 @@ void enqueueSorted(Tasks* list, PROCESS_STRUCT* process) {
     }
 }
 
-
+/**
+ * Função responsável por retirar a primeira tarefa da lista ligada.
+ *
+ * @param list A lista ligada de onde a tarefa será retirada.
+ * @return Um apontador para a estrutura de dados da tarefa retirada.
+ */
 PROCESS_STRUCT* dequeue(Tasks* list) {
     if (list->head == NULL) {
         return NULL;
@@ -376,6 +460,13 @@ PROCESS_STRUCT* dequeue(Tasks* list) {
 }
 
 
+/**
+ * Função responsável por retirar uma tarefa específica da lista ligada com base em seu ID.
+ *
+ * @param list A lista ligada de onde a tarefa será retirada.
+ * @param id O identificador único da tarefa a ser retirada.
+ * @return Um apontador para a estrutura de dados da tarefa retirada.
+ */
 PROCESS_STRUCT* dequeueById(Tasks* list, int id) {
     if (list->head == NULL) {
         return NULL;
@@ -409,7 +500,11 @@ PROCESS_STRUCT* dequeueById(Tasks* list, int id) {
     return process;
 }
 
-
+/**
+ * Função responsável por libertar a memória alocada para a lista ligada de tarefas.
+ *
+ * @param list A lista ligada a ser libertada.
+ */
 void freeTasks(Tasks* list) {
     Task* current = list->head;
     while (current != NULL) {
@@ -421,7 +516,11 @@ void freeTasks(Tasks* list) {
     free(list);
 }
 
-
+/**
+ * Função responsável por imprimir os elementos da lista ligada.
+ *
+ * @param list A lista ligada a ser impressa.
+ */
 void printLinkedList(Tasks* list) {
     if (list->head == NULL) {
         printf("A lista está vazia.\n");
@@ -436,12 +535,29 @@ void printLinkedList(Tasks* list) {
     }
 }
 
+
+/**
+ * Função responsável por enviar o estado de uma tarefa para um cliente.
+ *
+ * @param fdClient O descritor de arquivo para comunicar com o cliente.
+ * @param id O identificador único da tarefa.
+ * @param command O comando associado à tarefa.
+ */
 void sendProcessState(int fdClient, int id, const char* command) {
     char message[MAX_RESPONSE_SIZE];
     snprintf(message, sizeof(message), "%d %s\n", id, command);
     write(fdClient, message, strlen(message));
 }
 
+
+/**
+ * Função responsável por enviar o estado de uma tarefa concluída para um cliente.
+ *
+ * @param fdClient O descritor de arquivo para comunicar com o cliente.
+ * @param id O identificador único da tarefa.
+ * @param command O comando associado à tarefa.
+ * @param time O tempo total de execução da tarefa.
+ */
 void sendProcessStateCompleted(int fdClient, int id, const char* command, double time) {
     char message[MAX_RESPONSE_SIZE];
     snprintf(message, sizeof(message), "%d %s %.2f ms\n", id, command, time);
@@ -449,6 +565,12 @@ void sendProcessStateCompleted(int fdClient, int id, const char* command, double
 }
 
 
+/**
+ * Função responsável por enviar a lista de tarefas em execução, agendadas e concluídas para um cliente.
+ *
+ * @param list A lista ligada de tarefas a ser enviada.
+ * @param fdClient O descritor de arquivo para comunicar com o cliente.
+ */
 void sendLinkedList(Tasks* list, int fdClient) {
     if (list->head == NULL) {
         char message[MAX_RESPONSE_SIZE];
@@ -464,6 +586,13 @@ void sendLinkedList(Tasks* list, int fdClient) {
     }
 }
 
+
+/**
+ * Função responsável por enviar a lista de tarefas concluídas para um cliente.
+ *
+ * @param list A lista ligada de tarefas concluídas a ser enviada.
+ * @param fdClient O descritor de arquivo para comunicar com o cliente.
+ */
 void sendLinkedListCompleted(Tasks* list, int fdClient) {
     if (list->head == NULL) {
         char message[MAX_RESPONSE_SIZE];
@@ -479,6 +608,17 @@ void sendLinkedListCompleted(Tasks* list, int fdClient) {
     }
 }
 
+
+
+/**
+ * Função responsável por lidar com uma solicitação de status recebida de um cliente.
+ *
+ * @param fdClient O descritor de arquivo para comunicação com o cliente.
+ * @param fdOrchestrator O descritor de arquivo para comunicação com o orquestrador.
+ * @param running_tasks A lista de tarefas em execução.
+ * @param scheduled_tasks A lista de tarefas agendadas.
+ * @param completed_tasks A lista de tarefas concluídas.
+ */
 void handle_status_request(int fdClient, int fdOrchestrator, Tasks* running_tasks, Tasks* scheduled_tasks, Tasks* completed_tasks) {
     int fork_status = fork();
 

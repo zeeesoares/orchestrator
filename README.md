@@ -25,6 +25,7 @@ To run the orchestrator, use the following command:
 To run the client and submit tasks, use the following example commands:
 
 ./bin/client execute <time> <-u|-p> <command>
+
 -u for simple linux comands | -p for pipeline commands
 
 This command executes reading the largefile.txt file for 1000 milliseconds. The expected execution time is close to 1000 ms.
